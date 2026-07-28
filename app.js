@@ -1,54 +1,10 @@
 // State Management
 let appState = {
   workbook: null,
-  fileName: 'logistics_log.xlsx',
+  fileName: CONFIG.fileName,
   entries: [],
-  loadingLocations: [
-  "AAISAHEB",
-  "ADITYA",
-  "AM",
-  "APQ",
-  "B17",
-  "BELRICE",
-  "C14",
-  "C15",
-  "CK01",
-  "JK",
-  "LUMAX",
-  "MAHALAXMI",
-  "METPROTECT",
-  "PARSHWANATH",
-  "PURFLUX",
-  "SHRILAXMI",
-  "SHRIVINAYAK",
-  "TATA",
-  "TRIPLEX",
-  "UNIVERSAL",
-  "Universal"
-],
-  unloadingLocations: [
-  "AAISAHEB",
-  "ADITYA",
-  "AM",
-  "APQ",
-  "B17",
-  "BELRICE",
-  "C14",
-  "C15",
-  "CK01",
-  "JK",
-  "LUMAX",
-  "MAHALAXMI",
-  "METPROTECT",
-  "PARSHWANATH",
-  "PURFLUX",
-  "SHRILAXMI",
-  "SHRIVINAYAK",
-  "TATA",
-  "TRIPLEX",
-  "UNIVERSAL",
-  "Universal"
-],
+  loadingLocations: CONFIG.loadingLocations,
+  unloadingLocations: CONFIG.unloadingLocations,
   globalMargin: 0.0
 };
 
@@ -67,6 +23,8 @@ const els = {
   selectUnloading: document.getElementById('select-unloading'),
   inputWeight: document.getElementById('input-weight'),
   inputRate: document.getElementById('input-rate'),
+  inputChallanNo: document.getElementById('input-challan-no'),
+  inputGateNo: document.getElementById('input-gate-no'),
   
   inputGlobalMargin: document.getElementById('input-global-margin'),
   summaryTotalWeight: document.getElementById('summary-total-weight'),
@@ -78,10 +36,20 @@ const els = {
   addEntryModal: document.getElementById('add-entry-modal'),
   btnCloseAddModal: document.getElementById('btn-close-add-modal'),
   btnCancelAddModal: document.getElementById('btn-cancel-add-modal'),
+  btnOpenSummaryModal: document.getElementById('btn-open-summary-modal'),
+  summaryModal: document.getElementById('summary-modal'),
+  btnCloseSummaryModal: document.getElementById('btn-close-summary-modal'),
+  btnCloseSummaryModalOk: document.getElementById('btn-close-summary-modal-ok'),
+  mobileBtnUpload: document.getElementById('mobile-btn-upload'),
+  mobileBtnOpenAddModal: document.getElementById('mobile-btn-open-add-modal'),
+  mobileBtnOpenSummaryModal: document.getElementById('mobile-btn-open-summary-modal'),
+  mobileBtnDownload: document.getElementById('mobile-btn-download'),
   searchPreview: document.getElementById('search-preview'),
-  tableBody: document.getElementById('table-body'),
   mobileCardsContainer: document.getElementById('mobile-cards-container'),
-  toastContainer: document.getElementById('toast-container')
+  toastContainer: document.getElementById('toast-container'),
+  toolbarCard: document.getElementById('toolbar-card'),
+  previewCard: document.getElementById('preview-card'),
+  dashboardEmptyState: document.getElementById('dashboard-empty-state')
 };
 
 // Initialize Application
@@ -169,7 +137,9 @@ function setupEventListeners() {
   els.btnDownload.addEventListener('click', downloadExcel);
 
   // Search filter
-  els.searchPreview.addEventListener('input', filterPreview);
+  if (els.searchPreview) {
+    els.searchPreview.addEventListener('input', filterPreview);
+  }
 
   // Modal Events
   els.btnOpenAddModal.addEventListener('click', openAddModal);
@@ -181,6 +151,27 @@ function setupEventListeners() {
   els.addEntryModal.addEventListener('click', (e) => {
     if (e.target === els.addEntryModal) closeAddModal();
   });
+
+  // Summary Modal Events
+  els.btnOpenSummaryModal.addEventListener('click', openSummaryModal);
+  
+  [els.btnCloseSummaryModal, els.btnCloseSummaryModalOk].forEach(btn => {
+    btn.addEventListener('click', closeSummaryModal);
+  });
+  
+  // Mobile Bottom Bar Events
+  if (els.mobileBtnUpload) {
+    els.mobileBtnUpload.addEventListener('click', () => els.fileInput.click());
+  }
+  if (els.mobileBtnOpenAddModal) {
+    els.mobileBtnOpenAddModal.addEventListener('click', openAddModal);
+  }
+  if (els.mobileBtnOpenSummaryModal) {
+    els.mobileBtnOpenSummaryModal.addEventListener('click', openSummaryModal);
+  }
+  if (els.mobileBtnDownload) {
+    els.mobileBtnDownload.addEventListener('click', downloadExcel);
+  }
 }
 
 function openAddModal() {
@@ -189,6 +180,14 @@ function openAddModal() {
 
 function closeAddModal() {
   els.addEntryModal.classList.add('hidden');
+}
+
+function openSummaryModal() {
+  els.summaryModal.classList.remove('hidden');
+}
+
+function closeSummaryModal() {
+  els.summaryModal.classList.add('hidden');
 }
 
 // Summary Calculations Logic
@@ -283,6 +282,9 @@ function handleFileSelect() {
       
       els.fileDropzone.classList.add('hidden');
       els.fileDetails.classList.remove('hidden');
+      if (els.toolbarCard) {
+        els.toolbarCard.classList.remove('hidden');
+      }
       renderPreview();
       calculateSummary();
       showToast('success', `Loaded ${file.name} successfully!`);
@@ -300,6 +302,8 @@ function parseImportedData(matrix) {
   // Find column indices (seeking weight in kilo, date, locations, and rate)
   const idx = {
     date: headers.findIndex(h => h.includes('date')),
+    challanNo: headers.findIndex(h => h.includes('challan')),
+    gateNo: headers.findIndex(h => h.includes('gate')),
     loading: headers.findIndex(h => h.includes('loading')),
     unloading: headers.findIndex(h => h.includes('unloading')),
     weight: headers.findIndex(h => h.includes('weight') || h.includes('kilo') || h.includes('kg')),
@@ -308,6 +312,7 @@ function parseImportedData(matrix) {
 
   const parsedEntries = [];
   let foundMargin = false;
+  let duplicateCount = 0;
   
   for (let i = 1; i < matrix.length; i++) {
     const row = matrix[i];
@@ -323,7 +328,7 @@ function parseImportedData(matrix) {
       // Try to parse global margin if the row starts with "Global Margin %"
       if (dateValStr.toLowerCase().includes('margin')) {
         // Search rate column for margin value
-        const marginIdx = idx.rate !== -1 ? idx.rate : 4;
+        const marginIdx = idx.rate !== -1 ? idx.rate : 6;
         const marginCell = row[marginIdx];
         if (typeof marginCell === 'number') {
           appState.globalMargin = marginCell <= 1 ? marginCell * 100 : marginCell;
@@ -335,18 +340,46 @@ function parseImportedData(matrix) {
     }
 
     const dateVal = idx.date !== -1 ? formatExcelDate(row[idx.date]) : '';
+    const challanNoVal = idx.challanNo !== -1 ? String(row[idx.challanNo] || '').trim().substring(0, CONFIG.maxLengths.challanNo) : '';
+    const gateNoVal = idx.gateNo !== -1 ? String(row[idx.gateNo] || '').trim().substring(0, CONFIG.maxLengths.gateNo) : '';
     const loadingVal = idx.loading !== -1 ? String(row[idx.loading] || '') : '';
     const unloadingVal = idx.unloading !== -1 ? String(row[idx.unloading] || '') : '';
     const weightVal = idx.weight !== -1 ? parseFloat(row[idx.weight]) || 0 : 0;
     const rateVal = idx.rate !== -1 ? parseFloat(row[idx.rate]) || 0 : 0;
 
-    parsedEntries.push({
+    const newEntry = {
       date: dateVal,
+      challanNo: challanNoVal,
+      gateNo: gateNoVal,
       loading: loadingVal,
       unloading: unloadingVal,
       weight: weightVal,
       rate: rateVal
+    };
+
+    // Check if duplicate of an entry already parsed
+    const isDuplicate = parsedEntries.some(entry => {
+      if (newEntry.challanNo && entry.challanNo && 
+          newEntry.challanNo.toLowerCase() === entry.challanNo.toLowerCase()) {
+        return true;
+      }
+      return (
+        entry.date === newEntry.date &&
+        entry.loading === newEntry.loading &&
+        entry.unloading === newEntry.unloading &&
+        entry.weight === newEntry.weight &&
+        entry.rate === newEntry.rate &&
+        entry.challanNo.toLowerCase() === newEntry.challanNo.toLowerCase() &&
+        entry.gateNo.toLowerCase() === newEntry.gateNo.toLowerCase()
+      );
     });
+
+    if (isDuplicate) {
+      duplicateCount++;
+      continue;
+    }
+
+    parsedEntries.push(newEntry);
   }
 
   appState.entries = parsedEntries;
@@ -354,21 +387,50 @@ function parseImportedData(matrix) {
     appState.globalMargin = 0.0;
     els.inputGlobalMargin.value = '0.0';
   }
+
+  if (duplicateCount > 0) {
+    showToast('warning', `Skipped ${duplicateCount} duplicate entries found in the file.`);
+  }
 }
 
 // Reset loaded file and clear state
 function resetFile() {
   appState.workbook = null;
-  appState.fileName = 'logistics_log.xlsx';
+  appState.fileName = CONFIG.fileName;
   appState.entries = [];
   appState.globalMargin = 0.0;
   els.fileInput.value = '';
   els.inputGlobalMargin.value = '0.0';
   els.fileDropzone.classList.remove('hidden');
   els.fileDetails.classList.add('hidden');
+  if (els.toolbarCard) {
+    els.toolbarCard.classList.add('hidden');
+  }
   renderPreview();
   calculateSummary();
   showToast('success', 'Workbook cleared. Starting fresh.');
+}
+
+// Helper: Check if an entry is a duplicate of an existing entry
+function isDuplicateEntry(newEntry) {
+  return appState.entries.some(entry => {
+    // If both have the same non-empty challan number, it's a duplicate
+    if (newEntry.challanNo && entry.challanNo && 
+        newEntry.challanNo.toLowerCase() === entry.challanNo.toLowerCase()) {
+      return true;
+    }
+    
+    // If all details match exactly
+    return (
+      entry.date === newEntry.date &&
+      entry.loading === newEntry.loading &&
+      entry.unloading === newEntry.unloading &&
+      entry.weight === newEntry.weight &&
+      entry.rate === newEntry.rate &&
+      entry.challanNo.toLowerCase() === newEntry.challanNo.toLowerCase() &&
+      entry.gateNo.toLowerCase() === newEntry.gateNo.toLowerCase()
+    );
+  });
 }
 
 // Form Submission - Add Entry
@@ -382,13 +444,40 @@ function handleFormSubmit(e) {
   const weight = parseFloat(els.inputWeight.value) || 0;
   const rate = parseFloat(els.inputRate.value) || 0;
   
+  const challanNo = els.inputChallanNo.value.trim();
+  const gateNo = els.inputGateNo.value.trim();
+  
+  // Validate length
+  if (challanNo.length > CONFIG.maxLengths.challanNo) {
+    showToast('danger', `Challan No must be at most ${CONFIG.maxLengths.challanNo} characters.`);
+    return;
+  }
+  if (gateNo.length > CONFIG.maxLengths.gateNo) {
+    showToast('danger', `Gate No must be at most ${CONFIG.maxLengths.gateNo} characters.`);
+    return;
+  }
+  
+  // Validate loading and unloading locations are not the same
+  if (loading === unloading) {
+    showToast('danger', 'Loading and unloading locations cannot be the same.');
+    return;
+  }
+  
   const newEntry = {
     date: formattedDate,
+    challanNo,
+    gateNo,
     loading,
     unloading,
     weight,
     rate
   };
+  
+  // Check for duplicate
+  if (isDuplicateEntry(newEntry)) {
+    showToast('warning', 'This entry (same Challan No or exact details) already exists.');
+    return;
+  }
   
   appState.entries.push(newEntry);
   
@@ -401,6 +490,8 @@ function handleFormSubmit(e) {
   els.selectUnloading.selectedIndex = 0;
   els.inputWeight.value = '';
   els.inputRate.value = '';
+  els.inputChallanNo.value = '';
+  els.inputGateNo.value = '';
   
   closeAddModal();
   
@@ -409,12 +500,25 @@ function handleFormSubmit(e) {
 
 // Render preview table (Desktop) & card-list (Mobile)
 function renderPreview() {
-  const filterText = els.searchPreview.value.toLowerCase();
+  // Toggle empty state dashboard vs preview card
+  if (els.previewCard && els.dashboardEmptyState) {
+    if (appState.entries.length === 0) {
+      els.previewCard.classList.add('hidden');
+      els.dashboardEmptyState.classList.remove('hidden');
+    } else {
+      els.previewCard.classList.remove('hidden');
+      els.dashboardEmptyState.classList.add('hidden');
+    }
+  }
+
+  const filterText = els.searchPreview ? els.searchPreview.value.toLowerCase() : '';
   
   // Filter entries
   const filtered = appState.entries.filter(entry => {
     return (
       entry.date.toLowerCase().includes(filterText) ||
+      (entry.challanNo && entry.challanNo.toLowerCase().includes(filterText)) ||
+      (entry.gateNo && entry.gateNo.toLowerCase().includes(filterText)) ||
       entry.loading.toLowerCase().includes(filterText) ||
       entry.unloading.toLowerCase().includes(filterText) ||
       String(entry.weight).includes(filterText) ||
@@ -423,55 +527,50 @@ function renderPreview() {
     );
   });
 
-  // 1. Render Desktop Table
-  if (filtered.length === 0) {
-    els.tableBody.innerHTML = `
-      <tr>
-        <td colspan="6" class="empty-state">No matching records found.</td>
-      </tr>`;
-  } else {
-    els.tableBody.innerHTML = filtered.map((entry, index) => `
-      <tr data-index="${index}">
-        <td>${entry.date}</td>
-        <td>${entry.loading}</td>
-        <td>${entry.unloading}</td>
-        <td>${entry.weight.toLocaleString()} kg</td>
-        <td>₹ ${formatCurrency(entry.rate)}</td>
-        <td>
-          <button class="delete-btn" onclick="deleteEntry(${index})" title="Delete row">
-            <i data-lucide="trash-2"></i>
-          </button>
-        </td>
-      </tr>
-    `).join('');
-  }
-
-  // 2. Render Mobile Cards
+  // Render Mobile Cards
   if (filtered.length === 0) {
     els.mobileCardsContainer.innerHTML = `<div class="empty-state">No matching records found.</div>`;
   } else {
     els.mobileCardsContainer.innerHTML = filtered.map((entry, index) => `
-      <div class="mobile-card">
+      <div class="mobile-card" onclick="toggleCardExpand(this)">
         <div class="mobile-card-header">
-          <span class="mobile-card-date">${entry.date}</span>
-          <button class="delete-btn" onclick="deleteEntry(${index})" title="Delete row">
-            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
-          </button>
-        </div>
-        <div class="mobile-card-route">
-          <i data-lucide="map-pin"></i>
-          <span>${entry.loading}</span>
-          <i data-lucide="arrow-right"></i>
-          <span>${entry.unloading}</span>
-        </div>
-        <div class="mobile-card-grid">
-          <div>
-            <span class="mobile-card-label">Weight:</span>
-            <span class="mobile-card-val">${entry.weight.toLocaleString()} kg</span>
+          <div class="mobile-card-summary">
+            <span class="mobile-card-date">${entry.date}</span>
+            <span class="mobile-card-divider">•</span>
+            <div class="mobile-card-route">
+              <span>${entry.loading}</span>
+              <i data-lucide="arrow-right" class="route-arrow"></i>
+              <span>${entry.unloading}</span>
+            </div>
           </div>
-          <div>
-            <span class="mobile-card-label">Rate:</span>
-            <span class="mobile-card-val">₹ ${formatCurrency(entry.rate)}</span>
+          <div class="mobile-card-toggle">
+            <i data-lucide="chevron-down" class="toggle-icon"></i>
+          </div>
+        </div>
+        
+        <div class="mobile-card-details hidden-details">
+          <div class="mobile-card-grid" style="margin-top: 10px; margin-bottom: 12px;">
+            <div>
+              <span class="mobile-card-label">Challan No</span>
+              <span class="mobile-card-val">${entry.challanNo || '-'}</span>
+            </div>
+            <div>
+              <span class="mobile-card-label">Gate No</span>
+              <span class="mobile-card-val">${entry.gateNo || '-'}</span>
+            </div>
+            <div>
+              <span class="mobile-card-label">Weight</span>
+              <span class="mobile-card-val">${entry.weight.toLocaleString()} kg</span>
+            </div>
+            <div>
+              <span class="mobile-card-label">Rate</span>
+              <span class="mobile-card-val">₹ ${formatCurrency(entry.rate)}</span>
+            </div>
+          </div>
+          <div class="mobile-card-actions">
+            <button type="button" class="btn-delete-mobile" onclick="event.stopPropagation(); deleteEntry(${index})">
+              <i data-lucide="trash-2" style="width: 14px; height: 14px; margin-right: 4px;"></i> Delete Entry
+            </button>
           </div>
         </div>
       </div>
@@ -489,6 +588,28 @@ window.deleteEntry = function(index) {
   showToast('success', 'Entry deleted.');
 };
 
+// Global scope card toggle handler for inline onclicks
+window.toggleCardExpand = function(cardEl) {
+  const detailsEl = cardEl.querySelector('.mobile-card-details');
+  const toggleIcon = cardEl.querySelector('.toggle-icon');
+  
+  if (detailsEl.classList.contains('hidden-details')) {
+    detailsEl.classList.remove('hidden-details');
+    cardEl.classList.add('expanded');
+    if (window.lucide) {
+      toggleIcon.setAttribute('data-lucide', 'chevron-up');
+      window.lucide.createIcons();
+    }
+  } else {
+    detailsEl.classList.add('hidden-details');
+    cardEl.classList.remove('expanded');
+    if (window.lucide) {
+      toggleIcon.setAttribute('data-lucide', 'chevron-down');
+      window.lucide.createIcons();
+    }
+  }
+};
+
 // Filter preview search input
 function filterPreview() {
   renderPreview();
@@ -498,6 +619,8 @@ function filterPreview() {
 function generateWorkbook() {
   const headers = [
     'Date', 
+    'Challan No',
+    'Gate No',
     'Loading Location', 
     'Unloading Location', 
     'Weight (Kilo)', 
@@ -506,6 +629,8 @@ function generateWorkbook() {
   
   const dataRows = appState.entries.map(e => [
     e.date,
+    e.challanNo || '',
+    e.gateNo || '',
     e.loading,
     e.unloading,
     e.weight,
@@ -531,12 +656,16 @@ function generateWorkbook() {
     'Total',
     '',
     '',
-    { f: `SUM(D2:D${dataRows.length + 1})`, v: totalWeightVal },
-    { f: `SUM(E2:E${dataRows.length + 1})`, v: totalRateVal }
+    '',
+    '',
+    { f: `SUM(F2:F${dataRows.length + 1})`, v: totalWeightVal },
+    { f: `SUM(G2:G${dataRows.length + 1})`, v: totalRateVal }
   ]);
   
   sheetData.push([
     'Global Margin %',
+    '',
+    '',
     '',
     '',
     '',
@@ -548,14 +677,16 @@ function generateWorkbook() {
     '',
     '',
     '',
-    { f: `E${totalRowIdx}*(1-E${marginRowIdx})`, v: netPaymentVal }
+    '',
+    '',
+    { f: `G${totalRowIdx}*(1-G${marginRowIdx})`, v: netPaymentVal }
   ]);
   
   const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
   
   // Apply formatting to cells in worksheet
-  // 1. Margin cell formatting (E[marginRowIdx])
-  const marginCellRef = `E${marginRowIdx}`;
+  // 1. Margin cell formatting (G[marginRowIdx])
+  const marginCellRef = `G${marginRowIdx}`;
   if (worksheet[marginCellRef]) {
     worksheet[marginCellRef].t = 'n';
     worksheet[marginCellRef].z = '0.0%';
@@ -563,7 +694,7 @@ function generateWorkbook() {
   
   // 2. Currency formatting on Rate values (using plain numbers to avoid ### errors)
   for (let r = 2; r <= dataRows.length + 1; r++) {
-    const rateRef = `E${r}`;
+    const rateRef = `G${r}`;
     if (worksheet[rateRef]) {
       worksheet[rateRef].t = 'n';
       worksheet[rateRef].z = '#,##0.00';
@@ -571,13 +702,13 @@ function generateWorkbook() {
   }
   
   // 3. Currency formatting on Total Rate and Net Payment formulas (using plain numbers)
-  const totalRateRef = `E${totalRowIdx}`;
+  const totalRateRef = `G${totalRowIdx}`;
   if (worksheet[totalRateRef]) {
     worksheet[totalRateRef].t = 'n';
     worksheet[totalRateRef].z = '#,##0.00';
   }
   
-  const netPaymentRef = `E${netPaymentRowIdx}`;
+  const netPaymentRef = `G${netPaymentRowIdx}`;
   if (worksheet[netPaymentRef]) {
     worksheet[netPaymentRef].t = 'n';
     worksheet[netPaymentRef].z = '#,##0.00';

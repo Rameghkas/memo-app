@@ -318,17 +318,29 @@ function parseImportedData(matrix) {
   
   for (let i = 1; i < matrix.length; i++) {
     const row = matrix[i];
-    if (row.length === 0 || row[0] === undefined) continue; // skip empty rows
+    if (row.length === 0) continue; // skip empty rows
 
     const dateValStr = String(row[0] || '').trim();
+    const labelValStr = String(row[5] || '').trim();
+
+    // Check if it has no date (and is not a summary row in column F)
+    if ((row[0] === undefined || dateValStr === '') && 
+        !labelValStr.toLowerCase().includes('total') && 
+        !labelValStr.toLowerCase().includes('margin') && 
+        !labelValStr.toLowerCase().includes('net')) {
+      continue;
+    }
     
-    // Check if it's a summary row in Excel, skip loading it as a data entry row
+    // Check if it's a summary row in Excel (checking both column A and column F)
     if (dateValStr.toLowerCase().includes('total') || 
         dateValStr.toLowerCase().includes('margin') || 
-        dateValStr.toLowerCase().includes('net')) {
+        dateValStr.toLowerCase().includes('net') ||
+        labelValStr.toLowerCase().includes('total') || 
+        labelValStr.toLowerCase().includes('margin') || 
+        labelValStr.toLowerCase().includes('net')) {
         
-      // Try to parse global margin if the row starts with "Global Margin %"
-      if (dateValStr.toLowerCase().includes('margin')) {
+      // Try to parse global margin if the row is "Global Margin %"
+      if (dateValStr.toLowerCase().includes('margin') || labelValStr.toLowerCase().includes('margin')) {
         // Search rate column for margin value
         const marginIdx = idx.rate !== -1 ? idx.rate : 6;
         const marginCell = row[marginIdx];
@@ -655,32 +667,32 @@ function generateWorkbook() {
   sheetData.push([]); // blank row
   
   sheetData.push([
+    '',
+    '',
+    '',
+    '',
+    '',
     'Total',
-    '',
-    '',
-    '',
-    '',
-    { f: `SUM(F2:F${dataRows.length + 1})`, v: totalWeightVal },
     { f: `SUM(G2:G${dataRows.length + 1})`, v: totalRateVal }
   ]);
   
   sheetData.push([
+    '',
+    '',
+    '',
+    '',
+    '',
     'Global Margin %',
-    '',
-    '',
-    '',
-    '',
-    '',
     appState.globalMargin / 100
   ]);
   
   sheetData.push([
+    '',
+    '',
+    '',
+    '',
+    '',
     'Net Payment',
-    '',
-    '',
-    '',
-    '',
-    '',
     { f: `G${totalRowIdx}*(1-G${marginRowIdx})`, v: netPaymentVal }
   ]);
   

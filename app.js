@@ -1,3 +1,5 @@
+import { CONFIG } from './constants.js';
+
 // State Management
 let appState = {
   workbook: null,

@@ -1,5 +1,5 @@
 // Application Constants & Configuration
-const CONFIG = {
+export const CONFIG = {
   fileName: 'logistics_log.xlsx',
   maxLengths: {
     challanNo: 12,

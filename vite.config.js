@@ -7,5 +7,22 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: 'react-vendor',
+              test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
+            },
+            {
+              name: 'mui-vendor',
+              test: /[\\/]node_modules[\\/](@mui|@emotion)[\\/]/,
+            },
+          ],
+        },
+      },
+    },
   }
 });
+

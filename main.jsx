@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ThemeProvider,
@@ -52,12 +52,52 @@ import HighlightOffIcon from '@mui/icons-material/HighlightOff';
 import { CONFIG } from './constants.js';
 
 function App() {
-  const [entries, setEntries] = useState([]);
+  const [entries, setEntries] = useState(() => {
+    try {
+      const saved = localStorage.getItem('logistics_entries');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to load entries from localStorage', e);
+      return [];
+    }
+  });
   const [loadingLocations, setLoadingLocations] = useState(CONFIG.loadingLocations);
   const [unloadingLocations, setUnloadingLocations] = useState(CONFIG.unloadingLocations);
-  const [globalMargin, setGlobalMargin] = useState(0.0);
+  const [globalMargin, setGlobalMargin] = useState(() => {
+    const saved = localStorage.getItem('logistics_margin');
+    return saved ? parseFloat(saved) : 0.0;
+  });
   const [fileName, setFileName] = useState(CONFIG.fileName);
   const [fileSize, setFileSize] = useState('');
+
+  // Sync entries to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('logistics_entries', JSON.stringify(entries));
+    } catch (e) {
+      console.error('Failed to save entries to localStorage', e);
+    }
+  }, [entries]);
+
+  // Sync globalMargin to localStorage
+  useEffect(() => {
+    localStorage.setItem('logistics_margin', String(globalMargin));
+  }, [globalMargin]);
+
+  // Harvest custom locations from loaded entries on startup
+  useEffect(() => {
+    if (entries.length > 0) {
+      const customLocs = [];
+      entries.forEach(e => {
+        if (e.loading) customLocs.push(e.loading);
+        if (e.unloading) customLocs.push(e.unloading);
+      });
+      if (customLocs.length > 0) {
+        setLoadingLocations(prev => Array.from(new Set([...prev, ...customLocs])).sort());
+        setUnloadingLocations(prev => Array.from(new Set([...prev, ...customLocs])).sort());
+      }
+    }
+  }, []);
   
   // Dialog visibility states
   const [openAddModal, setOpenAddModal] = useState(false);

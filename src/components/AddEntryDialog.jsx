@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -9,7 +9,9 @@ import {
   Button,
   IconButton,
   Typography,
-  Stack
+  Stack,
+  Box,
+  Chip
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -25,21 +27,33 @@ export default function AddEntryDialog({
   loadingLocations,
   unloadingLocations,
   onAddEntry,
-  showToast
+  showToast,
+  activeVehicle
 }) {
-  const [inputDate, setInputDate] = useState(() => {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  });
+  const [inputDate, setInputDate] = useState('');
   const [loading, setLoading] = useState('');
   const [unloading, setUnloading] = useState('');
   const [weight, setWeight] = useState('');
   const [rate, setRate] = useState('');
   const [challanNo, setChallanNo] = useState('');
   const [gateNo, setGateNo] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      setInputDate(`${yyyy}-${mm}-${dd}`);
+      
+      setLoading('');
+      setUnloading('');
+      setWeight('');
+      setRate('');
+      setChallanNo('');
+      setGateNo('');
+    }
+  }, [open]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -92,9 +106,19 @@ export default function AddEntryDialog({
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle component="div" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
-        <Typography variant="h6" fontWeight={700}>
-          Add Logistics Entry
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="h6" fontWeight={700}>
+            Add Logistics Entry
+          </Typography>
+          {activeVehicle && (
+            <Chip 
+              label={activeVehicle} 
+              size="small" 
+              color="primary"
+              sx={{ fontWeight: 700, fontSize: '0.7rem', height: 20 }}
+            />
+          )}
+        </Box>
         <IconButton onClick={onClose} size="small">
           <CloseIcon />
         </IconButton>
@@ -119,7 +143,7 @@ export default function AddEntryDialog({
             
             <TextField
               label="Challan No"
-              placeholder="Max 12 characters"
+              placeholder="Max 20 characters"
               fullWidth
               value={challanNo}
               onChange={(e) => setChallanNo(e.target.value)}
@@ -132,7 +156,7 @@ export default function AddEntryDialog({
             
             <TextField
               label="Gate No"
-              placeholder="Max 4 characters"
+              placeholder="Max 8 characters"
               fullWidth
               value={gateNo}
               onChange={(e) => setGateNo(e.target.value)}
@@ -153,6 +177,7 @@ export default function AddEntryDialog({
                 <TextField
                   {...params}
                   label="Loading Location"
+                  required
                   fullWidth
                 />
               )}
@@ -168,6 +193,7 @@ export default function AddEntryDialog({
                 <TextField
                   {...params}
                   label="Unloading Location"
+                  required
                   fullWidth
                 />
               )}

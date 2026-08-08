@@ -1,9 +1,12 @@
 // Application Constants & Configuration
+export const VEHICLES = ['LL6850', 'HU5155', 'NE5155']; 
+export const Number_prefix = "MH14";
+
 export const CONFIG = {
   fileName: 'logistics_log.xlsx',
   maxLengths: {
-    challanNo: 12,
-    gateNo: 4
+    challanNo: 20,
+    gateNo: 8
   },
   loadingLocations: [
     "A.C.P.L.",
@@ -69,9 +72,9 @@ export const CONFIG = {
     "AM",
     "APQ",
     "B17",
-    "BAJAJ AR01",
+    "BAJAJ AK01",
     "BAJAJ CH01",
-    "BAJAJ CR01",
+    "BAJAJ CK01",
     "BELRICE",
     "BELRISE",
     "C,14",

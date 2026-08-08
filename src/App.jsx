@@ -6,13 +6,16 @@ import LogsList from './components/LogsList.jsx';
 import MobileBottomBar from './components/MobileBottomBar.jsx';
 import AddEntryDialog from './components/AddEntryDialog.jsx';
 import SummaryDialog from './components/SummaryDialog.jsx';
+import DownloadDialog from './components/DownloadDialog.jsx';
 import { useLocalStorage } from './hooks/useLocalStorage.js';
 import { parseExcelFile, generateExcelWorkbook } from './utils/excel.js';
-import { CONFIG } from './constants.js';
+import { CONFIG, VEHICLES } from './constants.js';
 
 export default function App() {
   const [entries, setEntries] = useLocalStorage('logistics_entries', []);
   const [globalMargin, setGlobalMargin] = useLocalStorage('logistics_margin', 0.0);
+  
+  const [activeVehicle, setActiveVehicle] = useLocalStorage('active_vehicle', '');
   
   const [loadingLocations, setLoadingLocations] = useState(CONFIG.loadingLocations);
   const [unloadingLocations, setUnloadingLocations] = useState(CONFIG.unloadingLocations);
@@ -21,6 +24,7 @@ export default function App() {
   
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openSummaryModal, setOpenSummaryModal] = useState(false);
+  const [openDownloadModal, setOpenDownloadModal] = useState(false);
   
   const [toast, setToast] = useState({ open: false, type: 'info', message: '' });
   
@@ -65,6 +69,7 @@ export default function App() {
           date: headers.findIndex(h => h.includes('date')),
           challanNo: headers.findIndex(h => h.includes('challan')),
           gateNo: headers.findIndex(h => h.includes('gate')),
+          vehicle: headers.findIndex(h => h.includes('vehicle') || h.includes('vehical')),
           loading: headers.findIndex(h => h.includes('loading')),
           unloading: headers.findIndex(h => h.includes('unloading')),
           weight: headers.findIndex(h => h.includes('weight') || h.includes('kilo') || h.includes('kg')),
@@ -139,6 +144,7 @@ export default function App() {
           const dateVal = idx.date !== -1 ? formatExcelDateLocal(row[idx.date]) : '';
           const challanNoVal = idx.challanNo !== -1 ? String(row[idx.challanNo] || '').trim().substring(0, CONFIG.maxLengths.challanNo) : '';
           const gateNoVal = idx.gateNo !== -1 ? String(row[idx.gateNo] || '').trim().substring(0, CONFIG.maxLengths.gateNo) : '';
+          const vehicleVal = idx.vehicle !== -1 ? String(row[idx.vehicle] || '').trim() : '';
           const loadingVal = idx.loading !== -1 ? String(row[idx.loading] || '') : '';
           const unloadingVal = idx.unloading !== -1 ? String(row[idx.unloading] || '') : '';
           const weightVal = idx.weight !== -1 ? parseFloat(row[idx.weight]) || 0 : 0;
@@ -148,6 +154,7 @@ export default function App() {
             date: dateVal,
             challanNo: challanNoVal,
             gateNo: gateNoVal,
+            vehicle: vehicleVal || activeVehicle || 'UNKNOWN',
             loading: loadingVal,
             unloading: unloadingVal,
             weight: weightVal,
@@ -212,24 +219,32 @@ export default function App() {
   };
 
   const handleAddEntry = (newEntry) => {
+    const entryWithVehicle = {
+      ...newEntry,
+      vehicle: activeVehicle
+    };
+
     const isDuplicate = entries.some(entry => {
-      if (newEntry.challanNo && entry.challanNo && 
-          newEntry.challanNo.toLowerCase() === entry.challanNo.toLowerCase()) {
+      const entryVehicle = entry.vehicle;
+      if (entryWithVehicle.challanNo && entry.challanNo && 
+          entryWithVehicle.challanNo.toLowerCase() === entry.challanNo.toLowerCase() &&
+          entryVehicle === activeVehicle) {
         return true;
       }
       return (
-        entry.date === newEntry.date &&
-        entry.loading === newEntry.loading &&
-        entry.unloading === newEntry.unloading &&
-        entry.weight === newEntry.weight &&
-        entry.rate === newEntry.rate &&
-        entry.challanNo.toLowerCase() === newEntry.challanNo.toLowerCase() &&
-        entry.gateNo.toLowerCase() === newEntry.gateNo.toLowerCase()
+        entry.date === entryWithVehicle.date &&
+        entry.loading === entryWithVehicle.loading &&
+        entry.unloading === entryWithVehicle.unloading &&
+        entry.weight === entryWithVehicle.weight &&
+        entry.rate === entryWithVehicle.rate &&
+        entry.challanNo.toLowerCase() === entryWithVehicle.challanNo.toLowerCase() &&
+        entry.gateNo.toLowerCase() === entryWithVehicle.gateNo.toLowerCase() &&
+        entryVehicle === activeVehicle
       );
     });
 
     if (isDuplicate) {
-      showToast('warning', 'This entry (same Challan No or details) already exists.');
+      showToast('warning', 'This entry (same Challan No or details) already exists for this vehicle.');
       return;
     }
 
@@ -245,7 +260,7 @@ export default function App() {
       return prev;
     });
 
-    setEntries(prev => [...prev, newEntry]);
+    setEntries(prev => [...prev, entryWithVehicle]);
     setOpenAddModal(false);
     showToast('success', 'Entry added successfully!');
   };
@@ -255,11 +270,56 @@ export default function App() {
     showToast('success', 'Entry deleted.');
   };
 
-  const handleDownloadExcel = () => {
+  const handleOpenAddModal = () => {
+    if (!activeVehicle) {
+      showToast('error', 'Please select an active vehicle in the header first.');
+      return;
+    }
+    setOpenAddModal(true);
+  };
+
+  const handleOpenDownloadModal = () => {
+    if (!activeVehicle) {
+      showToast('error', 'Please select an active vehicle in the header first.');
+      return;
+    }
+    setOpenDownloadModal(true);
+  };
+
+  const handleDownloadExcel = (month, year) => {
+    if (!activeVehicle) {
+      showToast('error', 'Please select an active vehicle in the header first.');
+      return;
+    }
+
+    const filtered = entries.filter(e => {
+      const parts = e.date.split('/');
+      if (parts.length === 3) {
+        const entryVehicle = e.vehicle || 'MH14AK5690';
+        return parts[1] === month && parts[2] === year && entryVehicle === activeVehicle;
+      }
+      return false;
+    });
+
+    if (filtered.length === 0) {
+      showToast('warning', `No entries found for ${activeVehicle} in the selected month and year.`);
+      return;
+    }
+
+    const monthNames = {
+      '01': 'January', '02': 'February', '03': 'March', '04': 'April',
+      '05': 'May', '06': 'June', '07': 'July', '08': 'August',
+      '09': 'September', '10': 'October', '11': 'November', '12': 'December'
+    };
+    const monthName = monthNames[month];
+    const year2digit = year.substring(2);
+    const dynamicFileName = `${monthName}_${year2digit}_${activeVehicle}.xlsx`;
+
     generateExcelWorkbook(
-      entries,
+      filtered,
       globalMargin,
-      fileName,
+      dynamicFileName,
+      activeVehicle,
       (name) => showToast('success', `Exported and downloaded ${name}`),
       (err) => showToast('error', 'Error generating workbook.')
     );
@@ -293,7 +353,13 @@ export default function App() {
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
       <Box sx={{ pb: { xs: 10, sm: 4 }, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <Header isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} />
+        <Header 
+          isDarkMode={isDarkMode} 
+          onToggleTheme={() => setIsDarkMode(!isDarkMode)} 
+          vehicles={VEHICLES}
+          activeVehicle={activeVehicle}
+          onVehicleChange={setActiveVehicle}
+        />
         
         <Container maxWidth="xs">
           <Stack spacing={2.5}>
@@ -302,9 +368,9 @@ export default function App() {
               fileSize={fileSize}
               onFileLoaded={handleFileLoaded}
               onResetFile={handleResetFile}
-              onOpenAddModal={() => setOpenAddModal(true)}
+              onOpenAddModal={handleOpenAddModal}
               onOpenSummaryModal={() => setOpenSummaryModal(true)}
-              onDownloadExcel={handleDownloadExcel}
+              onDownloadExcel={handleOpenDownloadModal}
             />
 
             <LogsList
@@ -321,6 +387,7 @@ export default function App() {
           unloadingLocations={unloadingLocations}
           onAddEntry={handleAddEntry}
           showToast={showToast}
+          activeVehicle={activeVehicle}
         />
 
         <SummaryDialog
@@ -331,11 +398,20 @@ export default function App() {
           onMarginChange={setGlobalMargin}
         />
 
+        <DownloadDialog
+          open={openDownloadModal}
+          onClose={() => setOpenDownloadModal(false)}
+          entries={entries}
+          onDownload={handleDownloadExcel}
+          showToast={showToast}
+          activeVehicle={activeVehicle}
+        />
+
         <MobileBottomBar
           onFileLoaded={handleFileLoaded}
-          onOpenAddModal={() => setOpenAddModal(true)}
+          onOpenAddModal={handleOpenAddModal}
           onOpenSummaryModal={() => setOpenSummaryModal(true)}
-          onDownloadExcel={handleDownloadExcel}
+          onDownloadExcel={handleOpenDownloadModal}
         />
 
         <Snackbar

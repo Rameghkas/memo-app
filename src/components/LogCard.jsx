@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Box, Typography, IconButton, Collapse, Divider, Button, Grid } from '@mui/material';
+import { Card, CardContent, Box, Typography, IconButton, Collapse, Divider, Button, Grid, Chip } from '@mui/material';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -10,10 +10,24 @@ export default function LogCard({ entry, isExpanded, onToggleExpand, onDelete, f
     <Card variant="outlined" sx={{ cursor: 'pointer', '&:hover': { borderColor: 'primary.main' } }} onClick={onToggleExpand}>
       <CardContent sx={{ p: '12px !important' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
             <Typography variant="body2" fontWeight={700}>
               {entry.date}
             </Typography>
+            <Chip 
+              label={entry.vehicle} 
+              size="small" 
+              sx={{ 
+                height: 18, 
+                fontSize: '0.65rem', 
+                fontWeight: 700,
+                bgcolor: 'rgba(234, 179, 8, 0.08)',
+                color: 'primary.dark',
+                border: '1px solid',
+                borderColor: 'rgba(234, 179, 8, 0.25)',
+                '& .MuiChip-label': { px: 0.8 }
+              }} 
+            />
             <Typography variant="caption" color="text.muted">•</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
               <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap sx={{ maxWidth: 90 }}>

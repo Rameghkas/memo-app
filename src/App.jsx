@@ -321,7 +321,18 @@ export default function App() {
       dynamicFileName,
       activeVehicle,
       (name) => showToast('success', `Exported and downloaded ${name}`),
-      (err) => showToast('error', 'Error generating workbook.')
+      (err) => {
+        const isCancel = err && err.message && (
+          err.message.toLowerCase().includes('canceled') || 
+          err.message.toLowerCase().includes('cancelled') || 
+          err.message.toLowerCase().includes('dismissed')
+        );
+        if (isCancel) {
+          showToast('warning', 'Sharing was cancelled.');
+        } else {
+          showToast('error', err?.message || 'Error generating workbook.');
+        }
+      }
     );
   };
 

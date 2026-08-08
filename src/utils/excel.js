@@ -1,4 +1,7 @@
+import * as XLSX from 'xlsx';
 import { CONFIG } from '../constants.js';
+import { Capacitor } from '@capacitor/core';
+import { shareExcelWorkbook } from './whatsappShare.js';
 
 /**
  * Parses an Excel file using the global XLSX library.
@@ -12,10 +15,10 @@ export function parseExcelFile(file, onParsed, onError) {
   reader.onload = (e) => {
     try {
       const data = new Uint8Array(e.target.result);
-      const workbook = window.XLSX.read(data, { type: 'array', cellDates: true });
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
-      const rawData = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
       onParsed(rawData);
     } catch (err) {
       console.error(err);
@@ -86,7 +89,7 @@ export function generateExcelWorkbook(entries, globalMargin, fileName, activeVeh
       "MH14-" + activeVehicle || ''
     ]);
 
-    const worksheet = window.XLSX.utils.aoa_to_sheet(sheetData);
+    const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
 
     // Formatting margin cells
     const marginCellRef = `G${marginRowIdx}`;
@@ -138,11 +141,21 @@ export function generateExcelWorkbook(entries, globalMargin, fileName, activeVeh
     });
     worksheet['!cols'] = maxColWidths;
 
-    const newWorkbook = window.XLSX.utils.book_new();
-    window.XLSX.utils.book_append_sheet(newWorkbook, worksheet, 'Logistics Log');
-    window.XLSX.writeFile(newWorkbook, fileName);
+    const newWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(newWorkbook, worksheet, 'Logistics Log');
 
-    if (onExported) onExported(fileName);
+    if (Capacitor.isNativePlatform()) {
+      shareExcelWorkbook(newWorkbook, fileName)
+        .then(() => {
+          if (onExported) onExported(fileName);
+        })
+        .catch((err) => {
+          if (onError) onError(err);
+        });
+    } else {
+      XLSX.writeFile(newWorkbook, fileName);
+      if (onExported) onExported(fileName);
+    }
   } catch (err) {
     console.error(err);
     if (onError) onError(err);

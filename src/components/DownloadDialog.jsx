@@ -16,6 +16,8 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import GetAppIcon from '@mui/icons-material/GetApp';
+import { Capacitor } from '@capacitor/core';
+import { WHATSAPP_NUMBER } from '../utils/whatsappShare.js';
 
 const monthsList = [
   { value: '01', label: 'January' },
@@ -91,7 +93,7 @@ export default function DownloadDialog({ open, onClose, entries, onDownload, sho
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <GetAppIcon color="primary" />
           <Typography variant="h6" fontWeight={700}>
-            Download Data
+            {Capacitor.isNativePlatform() ? 'Share Data' : 'Download Data'}
           </Typography>
         </Box>
         <IconButton onClick={onClose} size="small">
@@ -100,9 +102,20 @@ export default function DownloadDialog({ open, onClose, entries, onDownload, sho
       </DialogTitle>
       <DialogContent dividers sx={{ py: 3 }}>
         <Stack spacing={3}>
-          <Typography variant="body2" color="text.secondary">
-            Select the Month and Year of the entries you want to export to Excel:
-          </Typography>
+          {Capacitor.isNativePlatform() ? (
+            <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1.5, borderLeft: 4, borderColor: 'primary.main' }}>
+              <Typography variant="subtitle2" fontWeight={700} color="primary.dark" gutterBottom>
+                WhatsApp Export
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.825rem', lineHeight: 1.4 }}>
+                The Excel file will be prepared. Please select the contact <strong>{WHATSAPP_NUMBER}</strong> in WhatsApp to share the generated file.
+              </Typography>
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Select the Month and Year of the entries you want to export to Excel:
+            </Typography>
+          )}
           
           <FormControl fullWidth>
             <InputLabel id="select-month-label">Month</InputLabel>
@@ -142,7 +155,7 @@ export default function DownloadDialog({ open, onClose, entries, onDownload, sho
           Cancel
         </Button>
         <Button onClick={handleDownloadClick} variant="contained" sx={{ fontWeight: 600 }}>
-          Download
+          {Capacitor.isNativePlatform() ? 'Share to WhatsApp' : 'Download'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -21,8 +21,12 @@ const els = {
   
   entryForm: document.getElementById('entry-form'),
   inputDate: document.getElementById('input-date'),
-  selectLoading: document.getElementById('select-loading'),
-  selectUnloading: document.getElementById('select-unloading'),
+  inputLoading: document.getElementById('input-loading'),
+  inputUnloading: document.getElementById('input-unloading'),
+  listLoading: document.getElementById('list-loading'),
+  listUnloading: document.getElementById('list-unloading'),
+  btnLoadingDropdown: document.getElementById('btn-loading-dropdown'),
+  btnUnloadingDropdown: document.getElementById('btn-unloading-dropdown'),
   inputWeight: document.getElementById('input-weight'),
   inputRate: document.getElementById('input-rate'),
   inputChallanNo: document.getElementById('input-challan-no'),
@@ -70,8 +74,6 @@ function initUI() {
   const dd = String(today.getDate()).padStart(2, '0');
   els.inputDate.value = `${yyyy}-${mm}-${dd}`;
   
-  // Populate dropdowns
-  populateDropdowns();
   calculateSummary();
 }
 
@@ -81,23 +83,123 @@ function initializeLucide() {
   }
 }
 
-// Populate Dropdown Menus
-function populateDropdowns() {
-  els.selectLoading.innerHTML = '<option value="" disabled selected>Select Loading Location</option>';
-  appState.loadingLocations.forEach(loc => {
-    const opt = document.createElement('option');
-    opt.value = loc;
-    opt.textContent = loc;
-    els.selectLoading.appendChild(opt);
+// Add a location to state lists (ensures uniqueness and sorting)
+function addNewLocation(loc) {
+  if (!loc) return false;
+  const trimmed = loc.trim();
+  if (!trimmed) return false;
+
+  let added = false;
+  if (!appState.loadingLocations.includes(trimmed)) {
+    appState.loadingLocations.push(trimmed);
+    appState.loadingLocations.sort();
+    added = true;
+  }
+  if (!appState.unloadingLocations.includes(trimmed)) {
+    appState.unloadingLocations.push(trimmed);
+    appState.unloadingLocations.sort();
+    added = true;
+  }
+  return added;
+}
+
+// Render dynamic dropdown options list based on search term
+function renderDropdownList(inputEl, listEl, locations, otherInputEl) {
+  const query = inputEl.value.trim().toLowerCase();
+  listEl.innerHTML = '';
+
+  // Filter out the location selected in the other input to avoid same source/destination
+  const otherVal = otherInputEl ? otherInputEl.value.trim().toLowerCase() : '';
+  const filtered = locations.filter(loc => loc.toLowerCase().includes(query) && loc.toLowerCase() !== otherVal);
+
+  filtered.forEach(loc => {
+    const item = document.createElement('div');
+    item.className = 'dropdown-item';
+    item.textContent = loc;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      inputEl.value = loc;
+      listEl.classList.add('hidden');
+    });
+    listEl.appendChild(item);
   });
 
-  els.selectUnloading.innerHTML = '<option value="" disabled selected>Select Unloading Location</option>';
-  appState.unloadingLocations.forEach(loc => {
-    const opt = document.createElement('option');
-    opt.value = loc;
-    opt.textContent = loc;
-    els.selectUnloading.appendChild(opt);
+  // Offer option to add a new location if no exact match exists
+  const hasExactMatch = locations.some(loc => loc.toLowerCase() === query);
+  const typedVal = inputEl.value.trim();
+  if (typedVal && !hasExactMatch) {
+    const addNewItem = document.createElement('div');
+    addNewItem.className = 'dropdown-item add-new';
+    addNewItem.innerHTML = `<i data-lucide="plus"></i> Add "${typedVal}"`;
+    addNewItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addNewLocation(typedVal);
+      inputEl.value = typedVal;
+      listEl.classList.add('hidden');
+      showToast('success', `Added "${typedVal}" to locations list`);
+    });
+    listEl.appendChild(addNewItem);
+    initializeLucide();
+  } else if (filtered.length === 0) {
+    const noResultItem = document.createElement('div');
+    noResultItem.className = 'dropdown-item no-result';
+    noResultItem.textContent = 'No matches found';
+    listEl.appendChild(noResultItem);
+  }
+}
+
+// Bind search, focus, blur, and toggle events for searchable dropdowns
+function setupSearchDropdown(inputEl, listEl, btnEl, getLocationsFn, otherInputEl) {
+  // Focus / Click input opens list
+  inputEl.addEventListener('focus', () => {
+    closeAllDropdowns();
+    listEl.classList.remove('hidden');
+    renderDropdownList(inputEl, listEl, getLocationsFn(), otherInputEl);
   });
+
+  inputEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    listEl.classList.remove('hidden');
+    renderDropdownList(inputEl, listEl, getLocationsFn(), otherInputEl);
+  });
+
+  // Typing filters list
+  inputEl.addEventListener('input', () => {
+    listEl.classList.remove('hidden');
+    renderDropdownList(inputEl, listEl, getLocationsFn(), otherInputEl);
+  });
+
+  // Chevron button toggles list
+  btnEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isHidden = listEl.classList.contains('hidden');
+    closeAllDropdowns();
+    if (isHidden) {
+      listEl.classList.remove('hidden');
+      renderDropdownList(inputEl, listEl, getLocationsFn(), otherInputEl);
+      inputEl.focus();
+    }
+  });
+
+  // Keyboard navigation
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      if (!listEl.classList.contains('hidden')) {
+        e.preventDefault(); // Prevent modal form submission
+        const items = listEl.querySelectorAll('.dropdown-item:not(.no-result)');
+        if (items.length > 0) {
+          items[0].click();
+        }
+      }
+    } else if (e.key === 'Escape') {
+      listEl.classList.add('hidden');
+    }
+  });
+}
+
+function closeAllDropdowns() {
+  if (els.listLoading) els.listLoading.classList.add('hidden');
+  if (els.listUnloading) els.listUnloading.classList.add('hidden');
 }
 
 // Setup Event Listeners
@@ -174,6 +276,17 @@ function setupEventListeners() {
   if (els.mobileBtnDownload) {
     els.mobileBtnDownload.addEventListener('click', downloadExcel);
   }
+
+  // Searchable Dropdowns Event Binding
+  setupSearchDropdown(els.inputLoading, els.listLoading, els.btnLoadingDropdown, () => appState.loadingLocations, els.inputUnloading);
+  setupSearchDropdown(els.inputUnloading, els.listUnloading, els.btnUnloadingDropdown, () => appState.unloadingLocations, els.inputLoading);
+
+  // Close dropdowns on clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#loading-dropdown-wrapper') && !e.target.closest('#unloading-dropdown-wrapper')) {
+      closeAllDropdowns();
+    }
+  });
 }
 
 function openAddModal() {
@@ -393,6 +506,10 @@ function parseImportedData(matrix) {
       continue;
     }
 
+    // Automatically harvest custom locations from imported Excel sheets
+    if (loadingVal) addNewLocation(loadingVal);
+    if (unloadingVal) addNewLocation(unloadingVal);
+
     parsedEntries.push(newEntry);
   }
 
@@ -453,13 +570,23 @@ function handleFormSubmit(e) {
   
   const rawDate = els.inputDate.value;
   const formattedDate = formatDateToDMY(rawDate);
-  const loading = els.selectLoading.value;
-  const unloading = els.selectUnloading.value;
+  const loading = els.inputLoading.value.trim();
+  const unloading = els.inputUnloading.value.trim();
   const weight = parseFloat(els.inputWeight.value) || 0;
   const rate = parseFloat(els.inputRate.value) || 0;
   
   const challanNo = els.inputChallanNo.value.trim();
   const gateNo = els.inputGateNo.value.trim();
+  
+  // Validate presence
+  if (!loading) {
+    showToast('danger', 'Please select or enter a loading location.');
+    return;
+  }
+  if (!unloading) {
+    showToast('danger', 'Please select or enter an unloading location.');
+    return;
+  }
   
   // Validate length
   if (challanNo.length > CONFIG.maxLengths.challanNo) {
@@ -493,6 +620,10 @@ function handleFormSubmit(e) {
     return;
   }
   
+  // Register locations in state lists if they don't exist
+  addNewLocation(loading);
+  addNewLocation(unloading);
+  
   appState.entries.push(newEntry);
   
   // Re-render Preview & Update Summary
@@ -500,8 +631,8 @@ function handleFormSubmit(e) {
   calculateSummary();
   
   // Reset Form inputs (excluding date which stays today)
-  els.selectLoading.selectedIndex = 0;
-  els.selectUnloading.selectedIndex = 0;
+  els.inputLoading.value = '';
+  els.inputUnloading.value = '';
   els.inputWeight.value = '';
   els.inputRate.value = '';
   els.inputChallanNo.value = '';

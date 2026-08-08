@@ -1,5 +1,5 @@
 {
-  "name": "sagar-app",
+  "name": "memo-app",
   "version": "1.0.0",
   "description": "",
   "main": "app.js",
@@ -12,6 +12,15 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.5",
     "vite": "^8.1.5"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.3.1",
+    "@mui/material": "^9.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }
